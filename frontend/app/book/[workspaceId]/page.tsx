@@ -167,23 +167,8 @@ export default function PublicBookingPage() {
         phone: phone.trim() || undefined,
       });
 
-      // Fire-and-forget confirmation via Next.js API route (email + SMS),
-      // using your configured SMTP and Twilio credentials.
-      try {
-        await fetch("/api/send-confirmation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            bookingId: booking.booking.id,
-            contactName: fullName.trim(),
-            email: email.trim() || undefined,
-            phoneNumber: phone.trim() || undefined,
-            startAt: selectedSlot.slot_start,
-          }),
-        });
-      } catch {
-        // Don't block the booking on notification errors
-      }
+      // Email confirmation will be implemented later
+      // TODO: Implement public email confirmation endpoint
 
       // If this booking type has a form, send form link email
       const contactEmail = email?.trim();

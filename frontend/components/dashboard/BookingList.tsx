@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { BookingCard } from "@/lib/types/booking";
 import { Table } from "@/components/ui/Table";
 import { useState } from "react";
-import { updateBookingStatus } from "@/lib/api/bookings";
+import { updateBookingStatus, sendBookingConfirmation } from "@/lib/api/bookings";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/?$/, "") || "http://localhost:8000/api/v1";
 
@@ -34,22 +34,17 @@ export function BookingList({
     }
 
     try {
-      const response = await fetch("/api/send-confirmation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          contactName,
-          email: email || undefined,
-          phoneNumber: phoneNumber || undefined,
-          startAt: booking.start_at,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error((data as { error?: string }).error ?? "Failed to send confirmation");
+      if (!token) {
+        throw new Error("Authentication required");
       }
+      
+      await sendBookingConfirmation(
+        booking.id,
+        contactName,
+        email || "",
+        booking.start_at,
+        token
+      );
 
       // Mark as confirmed when owner/staff sends confirmation (so it shows correctly in dashboard)
       if (workspaceId && token && (booking.status === "pending" || booking.status === "confirmed")) {
