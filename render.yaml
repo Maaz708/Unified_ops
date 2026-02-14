@@ -5,7 +5,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: gunicorn app.main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
         value: postgresql://max_70:bAlvCfmKOHqCg9LF9oi9tL38E8PUxl6M@dpg-d688pmp5pdvs73fuaib0-a.oregon-postgres.render.com/hackathon_db_phgz
