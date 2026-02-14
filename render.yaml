@@ -27,20 +27,11 @@ services:
   # Frontend Service
   - type: web
     name: hackathon-frontend
-    runtime: static
+    runtime: node
+    plan: free
     buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/.next
-    buildFilter:
-      paths:
-        - frontend/.next/**
-        - frontend/public/**
+    startCommand: cd frontend && npm start
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://hackathon-api.onrender.com/api/v1
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://hackathon-api.onrender.com/api/*
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    healthCheckPath: /
