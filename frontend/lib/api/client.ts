@@ -15,6 +15,7 @@ export async function request<T>(
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     body: body ? JSON.stringify(body) : undefined,
+    credentials: "include", // 🔥 REQUIRED for auth cookies
     cache: method === "GET" ? "no-store" : "no-cache"
   });
 

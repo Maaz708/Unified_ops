@@ -39,7 +39,10 @@ export interface PublicBookingResponse {
 }
 
 export async function listPublicBookingTypes(workspaceId: string): Promise<PublicBookingType[]> {
-  const res = await fetch(`${API_URL}/public/${workspaceId}/booking-types`, { cache: "no-store" });
+  const res = await fetch(`${API_URL}/public/${workspaceId}/booking-types`, { 
+    cache: "no-store",
+    credentials: "include"
+  });
   if (!res.ok) throw new Error(await res.text().catch(() => "Failed to load booking types"));
   return res.json();
 }
@@ -51,7 +54,7 @@ export async function getPublicAvailability(
 ): Promise<PublicAvailabilitySlot[]> {
   const res = await fetch(
     `${API_URL}/public/${workspaceId}/booking-types/${encodeURIComponent(slug)}/availability?day=${day}`,
-    { cache: "no-store" }
+    { cache: "no-store", credentials: "include" }
   );
   if (!res.ok) throw new Error(await res.text().catch(() => "Failed to load availability"));
   return res.json();
@@ -69,7 +72,7 @@ export async function getPublicAvailabilityRange(
 ): Promise<string[]> {
   const res = await fetch(
     `${API_URL}/public/${workspaceId}/booking-types/${encodeURIComponent(slug)}/availability-range?from_date=${fromDate}&to_date=${toDate}`,
-    { cache: "no-store" }
+    { cache: "no-store", credentials: "include" }
   );
   if (!res.ok) throw new Error(await res.text().catch(() => "Failed to load availability"));
   return res.json();
@@ -83,6 +86,7 @@ export async function createPublicBooking(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    credentials: "include"
   });
   if (!res.ok) throw new Error(await res.text().catch(() => "Booking failed"));
   return res.json();
