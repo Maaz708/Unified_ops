@@ -12,14 +12,24 @@ from app.models import *
 
 def export_local_data():
     """Export data from local database"""
-    local_engine = create_engine("sqlite:///./app.db")  # Update with your local DB URL
+    # Use your actual local PostgreSQL database
+    local_engine = create_engine("postgresql+psycopg2://postgres:blogroot@localhost:5432/hac_db")
     
     # Get all table data
     data = {}
     with local_engine.connect() as conn:
-        for table in Base.metadata.tables.keys():
-            result = conn.execute(text(f"SELECT * FROM {table}"))
-            data[table] = [dict(row._mapping) for row in result]
+        for table_name in Base.metadata.tables.keys():
+            try:
+                result = conn.execute(text(f"SELECT * FROM {table_name}"))
+                rows = [dict(row._mapping) for row in result]
+                if rows:  # Only add if there's data
+                    data[table_name] = rows
+                    print(f"  - {table_name}: {len(rows)} records")
+                else:
+                    print(f"  - {table_name}: 0 records")
+            except Exception as e:
+                print(f"  - {table_name}: Table not found or error ({e})")
+                continue
     
     return data
 
