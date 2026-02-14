@@ -8,9 +8,7 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: hackathon-db
-          property: connectionString
+        value: postgresql://max_70:bAlvCfmKOHqCg9LF9oi9tL38E8PUxl6M@dpg-d688pmp5pdvs73fuaib0-a.oregon-postgres.render.com/hackathon_db_phgz
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: GEMINI_API_KEY
