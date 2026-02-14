@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, Suspense } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 
@@ -11,7 +11,7 @@ const API_URL =
 type FormField = { id: string; label?: string; type?: string };
 type Schema = { fields?: FormField[] };
 
-export default function FormCompletePage() {
+function FormCompleteContent() {
   const searchParams = useSearchParams();
   const workspaceId = searchParams?.get("workspace") ?? "";
   const templateId = searchParams?.get("template") ?? "";
@@ -167,5 +167,13 @@ export default function FormCompletePage() {
         </Button>
       </form>
     </div>
+  );
+}
+
+export default function FormCompletePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <FormCompleteContent />
+    </Suspense>
   );
 }
