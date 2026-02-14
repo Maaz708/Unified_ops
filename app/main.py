@@ -59,3 +59,12 @@ def create_app() -> FastAPI:
 app = create_app()
 app.include_router(owner_availability.router)
 app.include_router(public_forms.router) # Include the new router
+
+@app.get("/")
+def root():
+    return {
+        "service": "Unified Operations Platform",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/api/v1/health"
+    }
