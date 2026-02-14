@@ -13,10 +13,10 @@ type Schema = { fields?: FormField[] };
 
 export default function FormCompletePage() {
   const searchParams = useSearchParams();
-  const workspaceId = searchParams.get("workspace") ?? "";
-  const templateId = searchParams.get("template") ?? "";
-  const bookingId = searchParams.get("booking") ?? "";
-  const contactId = searchParams.get("contact") ?? "";
+  const workspaceId = searchParams?.get("workspace") ?? "";
+  const templateId = searchParams?.get("template") ?? "";
+  const bookingId = searchParams?.get("booking") ?? "";
+  const contactId = searchParams?.get("contact") ?? "";
 
   const [template, setTemplate] = useState<{ id: string; name: string; schema: Schema } | null>(null);
   const [loading, setLoading] = useState(true);
