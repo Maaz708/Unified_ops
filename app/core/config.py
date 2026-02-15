@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     gemini_api_key: str
     resend_api_key: str
     resend_from_email: Optional[str] = None  # fallback "From" when workspace has no email config
+    reply_to_email: Optional[str] = None  # reply-to address for customer emails
     # Twilio (optional; for SMS when configured)
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None

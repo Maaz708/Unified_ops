@@ -8,17 +8,26 @@ async function sendEmailResend(params: {
   text: string;
   from: string;
   apiKey: string;
+  replyTo?: string;
 }): Promise<{ ok: boolean; id?: string; error?: string }> {
-  const { to, subject, text, from, apiKey } = params;
+  const { to, subject, text, from, apiKey, replyTo } = params;
   if (!apiKey) return { ok: false, error: "RESEND_API_KEY not set" };
   try {
+    const emailBody = {
+      from,
+      to,
+      subject,
+      text,
+      ...(replyTo && { replyTo: replyTo }),
+    };
+    
     const res = await fetch(RESEND_API_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from, to, subject, text }),
+      body: JSON.stringify(emailBody),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: (data as any).message || res.statusText };
@@ -61,16 +70,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const { bookingId, contactName, email, phoneNumber, startAt } = req.body;
 
+  console.log("Email confirmation request:", { bookingId, contactName, email, phoneNumber, startAt });
+
   if (!bookingId || !contactName || (!email && !phoneNumber) || !startAt) {
+    console.log("Missing required fields:", { bookingId, contactName, email, phoneNumber, startAt });
     return res.status(400).json({ error: "Missing required fields" });
   }
 
   const startTime = new Date(startAt).toLocaleString();
-  const text = `Hello ${contactName},\n\nYour booking (ID: ${bookingId}) is confirmed for ${startTime}.\n\nThank you!`;
-  const subject = "Booking Confirmation";
+  // Use your personal email to receive replies
+  const replyToEmail = process.env.REPLY_TO_EMAIL || "your-email@gmail.com";
+  const text = `Hello ${contactName},\n\nYour booking (ID: ${bookingId}) is confirmed for ${startTime}.\n\nPlease reply to this email if you have any questions!\n\nThank you!`;
+  const subject = `Booking Confirmation - ID: ${bookingId}`;
 
   const apiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+
+  console.log("Environment check:", { 
+    hasApiKey: !!apiKey, 
+    apiKeyPrefix: apiKey?.substring(0, 10) + "...",
+    fromEmail 
+  });
 
   if (email) {
     const result = await sendEmailResend({
@@ -79,6 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       to: email,
       subject,
       text,
+      replyTo: replyToEmail,
     });
     if (!result.ok) {
       console.error("Resend error:", result.error);

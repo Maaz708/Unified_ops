@@ -18,7 +18,7 @@ type Step = "type" | "date" | "slot" | "details" | "done";
 function formatSlotTime(iso: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString('en-US', { hour: "2-digit", minute: "2-digit", hour12: false });
   } catch {
     return iso;
   }
@@ -123,8 +123,15 @@ export default function PublicBookingPage() {
     setSelectedSlot(null);
     setLoading(true);
     getPublicAvailability(workspaceId, selectedType!.slug, dateStr)
-      .then(setSlots)
-      .catch((e) => setError(e.message))
+      .then((data) => {
+        console.log('Raw slots data:', data);
+        console.log('Available slots:', data.filter((s: any) => s.is_available));
+        setSlots(data);
+      })
+      .catch((e) => {
+        console.error('Error loading slots:', e);
+        setError(e.message);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -147,9 +154,14 @@ export default function PublicBookingPage() {
   };
 
   const availableSlots = slots.filter((s) => s.is_available);
+  console.log('Filtered availableSlots:', availableSlots);
 
   const handleSubmitBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('handleSubmitBooking called');
+    console.log('selectedType:', selectedType);
+    console.log('selectedSlot:', selectedSlot);
+    
     if (!selectedType || !selectedSlot) return;
     if (!email?.trim() && !phone?.trim()) {
       setError("Please enter email or phone.");
@@ -158,14 +170,16 @@ export default function PublicBookingPage() {
     setSubmitLoading(true);
     setError(null);
     try {
-      const booking = await createPublicBooking(workspaceId, {
+      const bookingData = {
         booking_type_slug: selectedType.slug,
         start_at: selectedSlot.slot_start,
         end_at: selectedSlot.slot_end,
         full_name: fullName.trim(),
         email: email.trim() || undefined,
         phone: phone.trim() || undefined,
-      });
+      };
+      console.log('Sending booking request:', bookingData);
+      const booking = await createPublicBooking(workspaceId, bookingData);
 
       // Email confirmation will be implemented later
       // TODO: Implement public email confirmation endpoint
@@ -337,19 +351,22 @@ export default function PublicBookingPage() {
                   <p className="text-sm text-slate-500">No available slots on this date.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {availableSlots.map((s) => (
-                      <button
-                        key={`${s.slot_start}-${s.slot_end}`}
-                        type="button"
-                        onClick={() => {
-                          setSelectedSlot(s);
-                          setStep("details");
-                        }}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        {formatSlotTime(s.slot_start)}
-                      </button>
-                    ))}
+                    {availableSlots.map((s) => {
+                      console.log('Rendering slot:', s.slot_start, formatSlotTime(s.slot_start));
+                      return (
+                        <button
+                          key={`${s.slot_start}-${s.slot_end}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSlot(s);
+                            setStep("details");
+                          }}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          {formatSlotTime(s.slot_start)}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

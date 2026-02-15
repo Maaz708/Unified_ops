@@ -69,12 +69,18 @@ class PublicBookingService:
         booking_type_slug: str,
         day: date,
     ) -> List[PublicAvailabilitySlotOut]:
+        print(f"DEBUG: get_availability_for_date called for workspace {workspace_id}, slug {booking_type_slug}, day {day}")
+        
         workspace = self._get_active_workspace(workspace_id)
 
         bt = self._get_booking_type_by_slug(workspace.id, booking_type_slug)
+        print(f"DEBUG: Found booking type: {bt.name} (ID: {bt.id})")
 
-        day_start = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc)
+        day_start = datetime.combine(day, datetime.min.time())  # No timezone - match database
         day_end = day_start + timedelta(days=1)
+        print(f"DEBUG: Searching slots between {day_start} and {day_end}")
+        print(f"DEBUG: Day start timezone: {day_start.tzinfo}")
+        print(f"DEBUG: Current UTC time: {datetime.now(timezone.utc)}")
 
         slots = self.db.scalars(
             select(AvailabilitySlot)
@@ -86,8 +92,13 @@ class PublicBookingService:
             )
             .order_by(AvailabilitySlot.start_at)
         ).all()
+        
+        print(f"DEBUG: Found {len(slots)} availability slots for {day}")
+        for i, s in enumerate(slots):
+            print(f"  {i+1}. {s.start_at} - {s.end_at} (staff: {s.staff_user_id})")
 
         if not slots:
+            print("DEBUG: No availability slots found, returning empty list")
             return []
 
         # Preload existing bookings overlapping these slots to mark availability
@@ -106,10 +117,16 @@ class PublicBookingService:
                 Booking.end_at > min_start,
             )
         ).all()
+        
+        print(f"DEBUG: Availability check for {day}, found {len(bookings)} bookings:")
+        for i, b in enumerate(bookings):
+            print(f"  {i+1}. {b.start_at} - {b.end_at} ({b.status})")
 
         def slot_is_occupied(slot: AvailabilitySlot) -> bool:
             for b in bookings:
                 same_staff = b.assigned_staff_id == slot.staff_user_id
+                # Compare database times directly (no UTC conversion needed)
+                
                 # if slot has no staff, treat any overlapping booking of this type as occupying
                 if slot.staff_user_id is None:
                     if not (
@@ -125,14 +142,59 @@ class PublicBookingService:
 
         result: List[PublicAvailabilitySlotOut] = []
         for s in slots:
-            result.append(
-                PublicAvailabilitySlotOut(
-                    slot_start=_ensure_utc(s.start_at),
-                    slot_end=_ensure_utc(s.end_at),
-                    staff_name=s.staff_user.full_name if s.staff_user else None,
-                    is_available=not slot_is_occupied(s),
+            # Split large slots into 1-hour chunks
+            current_start = s.start_at
+            slot_duration = (s.end_at - s.start_at).total_seconds() / 3600  # hours
+            
+            # Create 1-hour slots
+            while current_start + timedelta(hours=1) <= s.end_at:
+                hour_slot_end = current_start + timedelta(hours=1)
+                
+                # Check if this specific hour is occupied
+                hour_slot_occupied = False
+                for b in bookings:
+                    if (b.status != BookingStatus.cancelled):
+                        # Compare database times directly (no UTC conversion needed)
+                        
+                        if not (b.end_at <= current_start or b.start_at >= hour_slot_end):
+                            same_staff = b.assigned_staff_id == s.staff_user_id
+                            if s.staff_user_id is None or same_staff:
+                                hour_slot_occupied = True
+                                break
+                
+                result.append(
+                    PublicAvailabilitySlotOut(
+                        slot_start=current_start,  # Keep database time, don't convert to UTC
+                        slot_end=hour_slot_end,     # Keep database time, don't convert to UTC
+                        staff_name=s.staff_user.full_name if s.staff_user else None,
+                        is_available=not hour_slot_occupied,
+                    )
                 )
-            )
+                print(f"DEBUG: Created slot {current_start} - {hour_slot_end}, available: {not hour_slot_occupied}")
+                current_start = hour_slot_end
+            
+            # Handle remaining partial hour if any
+            if current_start < s.end_at:
+                # Check if this remaining slot is occupied
+                remaining_occupied = False
+                for b in bookings:
+                    if (b.status != BookingStatus.cancelled):
+                        # Compare database times directly (no UTC conversion needed)
+                        
+                        if not (b.end_at <= current_start or b.start_at >= s.end_at):
+                            same_staff = b.assigned_staff_id == s.staff_user_id
+                            if s.staff_user_id is None or same_staff:
+                                remaining_occupied = True
+                                break
+                
+                result.append(
+                    PublicAvailabilitySlotOut(
+                        slot_start=current_start,  # Keep database time, don't convert to UTC
+                        slot_end=s.end_at,         # Keep database time, don't convert to UTC
+                        staff_name=s.staff_user.full_name if s.staff_user else None,
+                        is_available=not remaining_occupied,
+                    )
+                )
         return result
 
     def get_available_dates_in_range(
@@ -164,8 +226,21 @@ class PublicBookingService:
         workspace = self._get_active_workspace(workspace_id)
         bt = self._get_booking_type_by_slug(workspace.id, data.booking_type_slug)
 
-        start_at = _ensure_utc(data.start_at)
-        end_at = _ensure_utc(data.end_at)
+        start_at = data.start_at
+        end_at = data.end_at
+        
+        # Convert UTC times from frontend to database naive times
+        if start_at.tzinfo is not None:
+            start_at = start_at.replace(tzinfo=None)
+        if end_at.tzinfo is not None:
+            end_at = end_at.replace(tzinfo=None)
+        
+        # Debug logging
+        print(f"DEBUG: Received booking request:")
+        print(f"  Raw start_at: {data.start_at}")
+        print(f"  Raw end_at: {data.end_at}")
+        print(f"  Parsed start_at: {start_at}")
+        print(f"  Parsed end_at: {end_at}")
 
         if end_at <= start_at:
             raise HTTPException(
@@ -173,60 +248,61 @@ class PublicBookingService:
                 detail="end_at must be after start_at.",
             )
 
-        # Find an availability slot that contains the requested time. Match in Python with
-        # UTC normalization and second truncation so JSON/DB datetime differences don't break.
-        day_start_utc = datetime.combine(start_at.date(), datetime.min.time(), tzinfo=timezone.utc)
-        day_end_utc = day_start_utc + timedelta(days=1)
-        candidates = self.db.scalars(
-            select(AvailabilitySlot)
-            .where(
-                AvailabilitySlot.workspace_id == workspace.id,
-                AvailabilitySlot.booking_type_id == bt.id,
-                AvailabilitySlot.start_at < day_end_utc,
-                AvailabilitySlot.end_at > day_start_utc,
-            )
-            .order_by(AvailabilitySlot.start_at)
-        ).all()
-        req_start = _truncate_to_seconds(_ensure_utc(start_at))
-        req_end = _truncate_to_seconds(_ensure_utc(end_at))
-        slot = None
-        for s in candidates:
-            slot_start = _truncate_to_seconds(_ensure_utc(s.start_at))
-            slot_end = _truncate_to_seconds(_ensure_utc(s.end_at))
-            if slot_start <= req_start and slot_end >= req_end:
-                slot = s
-                break
-        if not slot:
+        # Validate booking duration (max 2 hours)
+        duration_hours = (end_at - start_at).total_seconds() / 3600
+        if duration_hours > 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Requested time is not available for this booking type.",
+                detail="Booking duration cannot exceed 2 hours.",
             )
+
+        # Check if the requested time conflicts with existing bookings
+        print(f"DEBUG: Checking for conflicts between {start_at} and {end_at}")
+        
+        # First, let's see all bookings for this workspace and type
+        all_bookings = self.db.scalars(
+            select(Booking)
+            .where(
+                Booking.workspace_id == workspace.id,
+                Booking.booking_type_id == bt.id,
+                Booking.status != BookingStatus.cancelled,
+            )
+            .order_by(Booking.start_at)
+        ).all()
+        
+        print(f"DEBUG: Found {len(all_bookings)} total bookings:")
+        for i, b in enumerate(all_bookings):
+            # Compare database times directly (no UTC conversion needed)
+            print(f"  {i+1}. {b.start_at} - {b.end_at} ({b.status})")
+            # Check overlap using database times
+            overlap = (b.start_at < end_at and b.end_at > start_at)
+            print(f"     Overlap with request: {overlap}")
+        
+        # Find conflicting booking using database time comparison
+        conflicting_booking = None
+        for b in all_bookings:
+            overlap = (b.start_at < end_at and b.end_at > start_at)
+            if overlap:
+                conflicting_booking = b
+                break
+        
+        if conflicting_booking:
+            print(f"DEBUG: Found conflicting booking: {conflicting_booking.start_at} - {conflicting_booking.end_at} ({conflicting_booking.status})")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Time slot already booked.",
+            )
+        else:
+            print("DEBUG: No conflicting booking found")
 
         contact = self._get_or_create_contact(workspace.id, data)
         conversation = self._get_or_create_conversation(workspace.id, contact)
-
-        # Double-booking pre-check for staff-less slots
-        if slot.staff_user_id is None:
-            exists_conflict = self.db.scalar(
-                select(func.count()).select_from(Booking).where(
-                    Booking.workspace_id == workspace.id,
-                    Booking.booking_type_id == bt.id,
-                    Booking.status != BookingStatus.cancelled,
-                    Booking.start_at < end_at,
-                    Booking.end_at > start_at,
-                )
-            )
-            if exists_conflict:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Time slot already booked.",
-                )
 
         booking = Booking(
             workspace_id=workspace.id,
             contact_id=contact.id,
             booking_type_id=bt.id,
-            assigned_staff_id=slot.staff_user_id,
+            assigned_staff_id=None,  # No specific staff assignment for public bookings
             conversation_id=conversation.id,
             start_at=start_at,
             end_at=end_at,

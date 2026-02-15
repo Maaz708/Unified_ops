@@ -103,7 +103,7 @@ export function BookingList({
     <Table>
       <thead className="bg-slate-50">
         <tr>
-          <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Time</th>
+          <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Date & Time</th>
           <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Contact</th>
           <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Type</th>
           <th className="px-4 py-2 text-left text-xs font-medium text-slate-500">Status</th>
@@ -133,45 +133,70 @@ export function BookingList({
             }
           >
             <td className="px-4 py-2 text-slate-700" suppressHydrationWarning>
-              {new Date(b.start_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              <div className="text-xs text-slate-500">
+                {b.start_at ? new Date(b.start_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : ''}
+              </div>
+              <div className="text-sm font-medium">
+                {b.start_at ? new Date(b.start_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) : ''}
+              </div>
             </td>
             <td className="px-4 py-2 text-slate-800">{b.contact_name || "Unknown"}</td>
             <td className="px-4 py-2 text-slate-700">{b.booking_type_name || "-"}</td>
             <td className="px-4 py-2 text-xs uppercase text-slate-500">{b.status}</td>
             {!showHistory && workspaceId && token && (
               <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                {b.status !== "completed" && b.status !== "no_show" && (
+                {b.status !== "cancelled" ? (
                   <span className="flex gap-1 flex-wrap">
                     <button
                       type="button"
-                      className="text-xs font-medium text-green-700 hover:underline"
+                      className="text-xs font-medium text-red-700 hover:underline"
                       onClick={async () => {
-                        try {
-                          await updateBookingStatus(workspaceId!, b.id, "completed", token);
-                          router.refresh();
-                        } catch {
-                          alert("Failed to update status");
+                        if (confirm("Are you sure you want to cancel this booking? The time slot will become available for other customers.")) {
+                          try {
+                            await updateBookingStatus(workspaceId!, b.id, "cancelled", token);
+                            router.refresh();
+                          } catch {
+                            alert("Failed to cancel booking");
+                          }
                         }
                       }}
                     >
-                      Mark completed
+                      Cancel booking
                     </button>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-amber-700 hover:underline"
-                      onClick={async () => {
-                        try {
-                          await updateBookingStatus(workspaceId!, b.id, "no_show", token);
-                          router.refresh();
-                        } catch {
-                          alert("Failed to update status");
-                        }
-                      }}
-                    >
-                      No-show
-                    </button>
+                    {b.status !== "completed" && b.status !== "no_show" ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-green-700 hover:underline"
+                        onClick={async () => {
+                          try {
+                            await updateBookingStatus(workspaceId!, b.id, "completed", token);
+                            router.refresh();
+                          } catch {
+                            alert("Failed to update status");
+                          }
+                        }}
+                      >
+                        Mark completed
+                      </button>
+                    ) : null}
+                    {b.status !== "completed" && b.status !== "no_show" ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-amber-700 hover:underline"
+                        onClick={async () => {
+                          try {
+                            await updateBookingStatus(workspaceId!, b.id, "no_show", token);
+                            router.refresh();
+                          } catch {
+                            alert("Failed to update status");
+                          }
+                        }}
+                      >
+                        No-show
+                      </button>
+                    ) : null}
                   </span>
-                )}
+                ) : null}
               </td>
             )}
           </tr>

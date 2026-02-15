@@ -50,8 +50,11 @@ class PublicBookingCreateRequest(BaseModel):
 
     @field_validator("phone")
     @classmethod
-    def at_least_one_contact(cls, v, values):
-        email = values.get("email")
+    def at_least_one_contact(cls, v, info):
+        if info.data and "email" in info.data:
+            email = info.data["email"]
+        else:
+            email = None
         if not email and not v:
             raise ValueError("Either email or phone must be provided.")
         return v

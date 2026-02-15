@@ -223,14 +223,7 @@ def create_availability_slot(
         staff_user_id = staff.id
     start_at = payload.start_at
     end_at = payload.end_at
-    if start_at.tzinfo is None:
-        start_at = start_at.replace(tzinfo=timezone.utc)
-    else:
-        start_at = start_at.astimezone(timezone.utc)
-    if end_at.tzinfo is None:
-        end_at = end_at.replace(tzinfo=timezone.utc)
-    else:
-        end_at = end_at.astimezone(timezone.utc)
+    # Keep database local time - don't convert to UTC
     if end_at <= start_at:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_at must be after start_at")
     slot = AvailabilitySlot(
